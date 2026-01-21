@@ -1,7 +1,7 @@
 """
-Streamlit UI for Research+FactCheck Chat Agent.
+Apex - AI Research Assistant UI.
 
-This is the frontend for the Vanna-style backend that provides:
+Streamlit frontend for the Apex research chat system that provides:
 - Chat interface with message history
 - Real-time step-by-step progress display
 - Collapsible accordions for each workflow step
@@ -19,7 +19,7 @@ import httpx
 import streamlit as st
 
 # Must be the first Streamlit command in the script.
-st.set_page_config(page_title="Research+FactCheck Chat (Ollama)", layout="wide")
+st.set_page_config(page_title="Apex", page_icon="🔬", layout="wide")
 
 
 def _get_backend_base_url() -> str:

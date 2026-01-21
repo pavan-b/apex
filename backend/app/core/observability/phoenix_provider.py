@@ -126,7 +126,7 @@ class ArizePhoenixProvider(ObservabilityProvider):
     Example:
         provider = ArizePhoenixProvider(
             endpoint="http://localhost:6006",
-            project_name="apex-research-chat",
+            project_name="apex",
         )
 
         # Initialize (call before LangChain imports)
@@ -223,7 +223,7 @@ class ArizePhoenixProvider(ObservabilityProvider):
             self._project_name
             or os.getenv("PHOENIX_SERVICE_NAME")
             or file_env.get("PHOENIX_SERVICE_NAME")
-            or "apex-research-chat"
+            or "apex"
         )
 
         api_key = (

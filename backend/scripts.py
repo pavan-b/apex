@@ -1,11 +1,12 @@
 """
-CLI entry points for running the application.
+Apex CLI - Entry points for running the application.
 
 These functions are registered as console scripts in pyproject.toml,
 allowing you to run:
-    uv run backend    # Start the FastAPI backend
-    uv run ui         # Start the Streamlit UI
-    uv run dev        # Start both in development mode
+    uv run backend       # Start the FastAPI backend
+    uv run ui            # Start the Streamlit UI
+    uv run phoenix-serve # Start Phoenix observability
+    uv run dev           # Show development instructions
 """
 
 import os
@@ -86,7 +87,8 @@ def run_dev():
     this prints the commands to run in separate terminals.
     """
     print("=" * 60)
-    print("Development Mode - Run these in separate terminals:")
+    print("  APEX - Development Mode")
+    print("  Run these commands in separate terminals:")
     print("=" * 60)
     print()
     print("1. Start Phoenix (optional, for tracing):")
