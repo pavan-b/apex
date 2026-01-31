@@ -33,6 +33,9 @@ from backend.app.core import (
     LlmService,
     LoggingMiddleware,
     ToolRegistry,
+    setup_logging,
+    get_logger,
+    get_log_directory,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
@@ -44,17 +47,20 @@ from backend.app.core.observability import (
 )
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 # =============================================================================
-# IMPORTANT: Initialize observability FIRST (before any LangChain imports)
-# This ensures auto-instrumentation captures all LLM calls
+# IMPORTANT: Initialize logging FIRST, then observability
+# This ensures all logs are captured to files from the start
 # =============================================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+setup_logging(
+    log_level=log_level,
+    log_to_console=True,
+    log_to_file=True,
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize Phoenix observability before LangChain imports
 
@@ -121,6 +127,7 @@ async def lifespan(app: FastAPI):
     logger.info("  Observability: %s (%s)",
                 "enabled" if tracing_enabled() else "disabled",
                 observability.name)
+    logger.info("  Log directory: %s", get_log_directory())
     logger.info("  Routes: POST /api/v1/chat/sse, GET /api/v1/health")
     logger.info("=" * 60)
 

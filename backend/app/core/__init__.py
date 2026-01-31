@@ -23,6 +23,7 @@ from backend.app.core.llm_service import LlmService
 from backend.app.core.middleware import LlmMiddleware, LoggingMiddleware, CachingMiddleware
 from backend.app.core.lifecycle import LifecycleHooks
 from backend.app.core.agent import Agent
+from backend.app.core.logging_config import setup_logging, get_logger, get_log_directory
 from backend.app.core.observability import (
     ObservabilityProvider,
     ArizePhoenixProvider,
@@ -48,6 +49,10 @@ __all__ = [
     "LifecycleHooks",
     # Agent
     "Agent",
+    # Logging
+    "setup_logging",
+    "get_logger",
+    "get_log_directory",
     # Observability
     "ObservabilityProvider",
     "ArizePhoenixProvider",
