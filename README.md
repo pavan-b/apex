@@ -1,5 +1,6 @@
 # Apex
 
+
 **Apex** is a production-ready AI research assistant powered by **Ollama (qwen3:8b)**, **LangGraph**, and **FastAPI**. Features intelligent query routing, parallel multi-source research, evidence synthesis, and robust hallucination detection using a multi-critic verification system.
 
 > *"Apex"* — reaching the peak of AI-assisted research through verified, factual answers.
