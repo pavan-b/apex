@@ -26,9 +26,9 @@ import asyncio
 import os
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Literal, TypedDict
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_ollama import ChatOllama
 from langgraph.graph import END, StateGraph
 
 from backend.app.agents.factcheck import verify_and_revise
@@ -141,24 +141,41 @@ def _is_deep_query(q: str) -> bool:
     return False
 
 
-def _get_llm(config: Dict[str, Any]) -> ChatOllama:
+def _get_llm(config: Dict[str, Any]) -> BaseChatModel:
     """
-    Create the Ollama chat model with runtime configuration.
+    Create the LLM chat model with runtime configuration.
+
+    Auto-detects provider: if OPENAI_API_KEY is set, uses OpenAI;
+    otherwise falls back to Ollama.
 
     Args:
         config: Runtime configuration dictionary.
 
     Returns:
-        Configured ChatOllama instance.
+        Configured BaseChatModel instance.
     """
-    return ChatOllama(
-        model=config.get("ollama_model", os.getenv(
-            "OLLAMA_MODEL", "qwen3:8b")),
-        base_url=config.get("ollama_base_url", os.getenv(
-            "OLLAMA_BASE_URL", "http://localhost:11434")),
-        temperature=float(config.get("ollama_temperature",
-                          os.getenv("OLLAMA_TEMPERATURE", "0.2"))),
-    )
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if openai_api_key:
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=config.get("openai_model", os.getenv(
+                "OPENAI_MODEL", "gpt-5.1")),
+            api_key=openai_api_key,
+            temperature=float(config.get("ollama_temperature",
+                              os.getenv("OLLAMA_TEMPERATURE", "0.2"))),
+        )
+    else:
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=config.get("ollama_model", os.getenv(
+                "OLLAMA_MODEL", "qwen3:8b")),
+            base_url=config.get("ollama_base_url", os.getenv(
+                "OLLAMA_BASE_URL", "http://localhost:11434")),
+            temperature=float(config.get("ollama_temperature",
+                              os.getenv("OLLAMA_TEMPERATURE", "0.2"))),
+        )
 
 
 # =============================================================================
@@ -270,7 +287,7 @@ async def _synthesis_node(state: LGState, config: RunnableConfig) -> LGState:
         Partial state updates with synthesis text.
     """
     emit = config["configurable"]["emit"]
-    llm: ChatOllama = config["configurable"]["llm"]
+    llm: BaseChatModel = config["configurable"]["llm"]
 
     await emit({
         "type": "step_started",
@@ -310,7 +327,7 @@ async def _producer_node(state: LGState, config: RunnableConfig) -> LGState:
         Partial state updates with the draft answer.
     """
     emit = config["configurable"]["emit"]
-    llm: ChatOllama = config["configurable"]["llm"]
+    llm: BaseChatModel = config["configurable"]["llm"]
 
     await emit({
         "type": "step_started",
@@ -363,7 +380,7 @@ async def _factcheck_node(state: LGState, config: RunnableConfig) -> LGState:
     """
     emit = config["configurable"]["emit"]
     cfg: Dict[str, Any] = config["configurable"]["cfg"]
-    llm: ChatOllama = config["configurable"]["llm"]
+    llm: BaseChatModel = config["configurable"]["llm"]
 
     max_rounds = int(cfg.get("verify_max_rounds", 3))
     best_of_n = int(cfg.get("best_of_n", 3))

@@ -14,10 +14,50 @@ import json
 import re
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
-from langchain_ollama import ChatOllama
 
 from backend.app.schemas import Source
+
+
+def _clone_with_temperature(llm: BaseChatModel, temperature: float) -> BaseChatModel:
+    """Create a copy of the LLM with a different temperature.
+
+    Supports both ChatOllama and ChatOpenAI providers.
+
+    Args:
+        llm: The source LLM instance.
+        temperature: Desired sampling temperature.
+
+    Returns:
+        A new LLM instance with the given temperature.
+    """
+    try:
+        from langchain_ollama import ChatOllama
+
+        if isinstance(llm, ChatOllama):
+            return ChatOllama(
+                model=llm.model,
+                base_url=llm.base_url,
+                temperature=temperature,
+            )
+    except ImportError:
+        pass
+
+    try:
+        from langchain_openai import ChatOpenAI
+
+        if isinstance(llm, ChatOpenAI):
+            return ChatOpenAI(
+                model=llm.model_name,
+                api_key=llm.openai_api_key,
+                temperature=temperature,
+            )
+    except ImportError:
+        pass
+
+    # Fallback: return the original llm unchanged
+    return llm
 
 
 async def verify_and_revise(
@@ -26,7 +66,7 @@ async def verify_and_revise(
     sources: List[Source],
     max_rounds: int,
     best_of_n: int,
-    llm: ChatOllama,
+    llm: BaseChatModel,
     emit: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Tuple[str, List[dict]]:
     """Verify and revise a draft answer using multi-critic feedback.
@@ -164,7 +204,7 @@ def _safe_json(s: str) -> Dict[str, Any]:
         return {}
 
 
-async def _decompose_claims(llm: ChatOllama, *, user_message: str, draft: str, evidence: str) -> List[Dict[str, Any]]:
+async def _decompose_claims(llm: BaseChatModel, *, user_message: str, draft: str, evidence: str) -> List[Dict[str, Any]]:
     """Extract atomic claims from the draft for verification.
 
     Args:
@@ -195,7 +235,7 @@ async def _decompose_claims(llm: ChatOllama, *, user_message: str, draft: str, e
 
 
 async def _critic_factuality(
-    llm: ChatOllama,
+    llm: BaseChatModel,
     user_message: str,
     draft: str,
     evidence: str,
@@ -230,7 +270,7 @@ async def _critic_factuality(
     return _normalize_critic(obj, fallback="factuality")
 
 
-async def _critic_citations(llm: ChatOllama, draft: str, evidence: str) -> Dict[str, Any]:
+async def _critic_citations(llm: BaseChatModel, draft: str, evidence: str) -> Dict[str, Any]:
     """Verify that citations are relevant and present when needed.
 
     Args:
@@ -261,7 +301,7 @@ async def _critic_citations(llm: ChatOllama, draft: str, evidence: str) -> Dict[
     return _normalize_critic(obj, fallback="citations")
 
 
-async def _critic_consistency(llm: ChatOllama, user_message: str, draft: str) -> Dict[str, Any]:
+async def _critic_consistency(llm: BaseChatModel, user_message: str, draft: str) -> Dict[str, Any]:
     """Detect internal contradictions or overconfident claims.
 
     Args:
@@ -302,7 +342,7 @@ def _normalize_critic(obj: Dict[str, Any], fallback: str) -> Dict[str, Any]:
     return obj
 
 
-async def _cove_questions(llm: ChatOllama, user_message: str, draft: str) -> List[str]:
+async def _cove_questions(llm: BaseChatModel, user_message: str, draft: str) -> List[str]:
     """Generate verification questions for CoVe.
 
     Args:
@@ -325,7 +365,7 @@ async def _cove_questions(llm: ChatOllama, user_message: str, draft: str) -> Lis
     return qs if isinstance(qs, list) else []
 
 
-async def _cove_answer_questions(llm: ChatOllama, questions: List[str], evidence: str) -> Dict[str, str]:
+async def _cove_answer_questions(llm: BaseChatModel, questions: List[str], evidence: str) -> Dict[str, str]:
     """Answer CoVe verification questions using evidence only.
 
     Args:
@@ -389,7 +429,7 @@ def _merge_feedback(
 
 
 async def _best_of_n_revisions(
-    llm: ChatOllama,
+    llm: BaseChatModel,
     *,
     user_message: str,
     draft: str,
@@ -431,7 +471,7 @@ async def _best_of_n_revisions(
     tasks = []
     for i in range(max(1, n)):
         t = temps[i % len(temps)]
-        cand_llm = ChatOllama(model=llm.model, base_url=llm.base_url, temperature=t)
+        cand_llm = _clone_with_temperature(llm, t)
         tasks.append(cand_llm.ainvoke([system, {"role": "user", "content": prompt}]))
     resps = await asyncio.gather(*tasks)
     outs = [getattr(r, "content", str(r)) for r in resps]
@@ -447,7 +487,7 @@ async def _best_of_n_revisions(
 
 
 async def _select_best_candidate(
-    llm: ChatOllama,
+    llm: BaseChatModel,
     user_message: str,
     evidence: str,
     candidates: List[str],

@@ -547,6 +547,11 @@ OLLAMA_MODEL=qwen3:8b
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_TEMPERATURE=0.2
 
+# OpenAI Configuration (optional)
+# Setting OPENAI_API_KEY switches the app from Ollama to OpenAI automatically.
+OPENAI_API_KEY=             # If set, uses OpenAI instead of Ollama
+OPENAI_MODEL=gpt-5.1        # OpenAI model name (default: gpt-5.1)
+
 # Workflow Configuration
 BEST_OF_N=3                 # Number of critics per verification round
 VERIFY_MAX_ROUNDS=3         # Maximum verification iterations

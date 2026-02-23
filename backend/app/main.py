@@ -3,7 +3,7 @@ FastAPI entrypoint for the chat backend (Vanna-style architecture).
 
 This module wires together all components:
 - Agent: Central orchestrator
-- LlmService: Ollama integration with middleware
+- LlmService: LLM integration (OpenAI or Ollama) with middleware
 - ToolRegistry: Registered search and fetch tools
 - ChatHandler: Request handling
 - Routes: POST /api/v1/chat/sse
@@ -49,6 +49,11 @@ from backend.app.core.observability import (
 import logging
 import os
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+# Load .env file so that OPENAI_API_KEY and other vars are available via os.getenv
+load_dotenv()
 
 # =============================================================================
 # IMPORTANT: Initialize logging FIRST, then observability
@@ -121,8 +126,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("=" * 60)
     logger.info("Backend starting up")
+    logger.info("  Provider: %s", llm_service.provider)
     logger.info("  Model: %s", llm_service.model)
-    logger.info("  Base URL: %s", llm_service.base_url)
+    if llm_service.provider == "ollama":
+        logger.info("  Base URL: %s", llm_service.base_url)
     logger.info("  Tools: %s", tool_registry.list_names())
     logger.info("  Observability: %s (%s)",
                 "enabled" if tracing_enabled() else "disabled",
@@ -143,7 +150,7 @@ async def lifespan(app: FastAPI):
 # =============================================================================
 
 app = FastAPI(
-    title="LangGraph Research+FactCheck Chat (Ollama qwen3:8b)",
+    title=f"LangGraph Research+FactCheck Chat ({llm_service.provider}: {llm_service.model})",
     description="Vanna-style agent with research, synthesis, and fact-checking",
     version="2.0.0",
     lifespan=lifespan,
@@ -178,6 +185,7 @@ async def health():
     """
     return {
         "ok": True,
+        "provider": llm_service.provider,
         "model": llm_service.model,
         "observability": {
             "provider": observability.name,

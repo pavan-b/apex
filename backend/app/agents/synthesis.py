@@ -7,8 +7,8 @@ Builds a concise evidence-backed plan/outline from retrieved sources.
 
 from typing import List
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
-from langchain_ollama import ChatOllama
 
 from backend.app.schemas import Source
 
@@ -52,7 +52,7 @@ def _evidence_table(sources: List[Source], max_items: int = 8) -> str:
     return "\n".join(lines)
 
 
-async def synthesize(user_message: str, sources: List[Source], llm: ChatOllama) -> str:
+async def synthesize(user_message: str, sources: List[Source], llm: BaseChatModel) -> str:
     """Produce a synthesis plan for the final answer.
 
     Args:

@@ -1,18 +1,20 @@
 """
 LLM service abstraction with middleware support.
 
-This module provides a clean interface for interacting with LLMs (specifically
-Ollama via LangChain) while supporting middleware chains for cross-cutting
-concerns like logging, caching, and cost tracking.
+This module provides a clean interface for interacting with LLMs
+(OpenAI or Ollama via LangChain) while supporting middleware chains
+for cross-cutting concerns like logging, caching, and cost tracking.
+
+Provider selection is automatic:
+  - If OPENAI_API_KEY is set → uses OpenAI (default model: gpt-5.1)
+  - Otherwise → falls back to Ollama (default model: qwen3:8b)
 
 The LlmService wraps the underlying LLM client and applies middlewares in order,
 allowing each middleware to intercept, modify, or short-circuit LLM calls.
 
 Example:
-    # Create service with middlewares
+    # Create service with middlewares (provider auto-detected from env)
     service = LlmService(
-        model="qwen3:8b",
-        base_url="http://localhost:11434",
         middlewares=[LoggingMiddleware(), CachingMiddleware()],
     )
 
@@ -29,8 +31,10 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, Sequence
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 if TYPE_CHECKING:
     from backend.app.core.middleware import LlmMiddleware
@@ -73,17 +77,20 @@ class LlmService:
     - Modify prompts
     - Short-circuit calls (e.g., return cached response)
 
+    Provider is auto-detected from environment variables:
+    - If OPENAI_API_KEY is present → OpenAI (model defaults to gpt-5.1)
+    - Otherwise → Ollama (model defaults to qwen3:8b)
+
     Attributes:
-        model: The model name (e.g., "qwen3:8b").
-        base_url: The Ollama server URL.
+        provider: The active provider name ("openai" or "ollama").
+        model: The model name (e.g., "gpt-5.1" or "qwen3:8b").
+        base_url: The Ollama server URL (only used with Ollama provider).
         temperature: Sampling temperature.
-        _client: The underlying LangChain ChatOllama client.
+        _client: The underlying LangChain BaseChatModel client.
         _middlewares: List of middleware instances.
 
     Example:
         service = LlmService(
-            model="qwen3:8b",
-            temperature=0.2,
             middlewares=[LoggingMiddleware()],
         )
 
@@ -107,29 +114,45 @@ class LlmService:
         """
         Initialize the LLM service.
 
+        Provider is auto-detected: if OPENAI_API_KEY env var is set, OpenAI
+        is used; otherwise Ollama is used.
+
         Args:
-            model: Model name. Defaults to OLLAMA_MODEL env var or "qwen3:8b".
-            base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL or localhost.
+            model: Model name override. Defaults to env var or provider default.
+            base_url: Ollama server URL (ignored for OpenAI). Defaults to OLLAMA_BASE_URL.
             temperature: Sampling temperature. Defaults to OLLAMA_TEMPERATURE or 0.2.
             middlewares: List of middleware instances to apply to all calls.
         """
-        self.model = model or os.getenv("OLLAMA_MODEL", "qwen3:8b")
-        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.temperature = temperature if temperature is not None else float(
             os.getenv("OLLAMA_TEMPERATURE", "0.2")
         )
         self._middlewares: list[LlmMiddleware] = list(middlewares) if middlewares else []
 
-        self._client = ChatOllama(
-            model=self.model,
-            base_url=self.base_url,
-            temperature=self.temperature,
-        )
+        # Auto-detect provider from environment
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if openai_api_key:
+            self.provider = "openai"
+            self.model = model or os.getenv("OPENAI_MODEL", "gpt-5.1")
+            self.base_url = ""  # Not used for OpenAI
+            self._client: BaseChatModel = ChatOpenAI(
+                model=self.model,
+                api_key=openai_api_key,
+                temperature=self.temperature,
+            )
+        else:
+            self.provider = "ollama"
+            self.model = model or os.getenv("OLLAMA_MODEL", "qwen3:8b")
+            self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            self._client = ChatOllama(
+                model=self.model,
+                base_url=self.base_url,
+                temperature=self.temperature,
+            )
 
         logger.info(
-            "LlmService initialized: model=%s, base_url=%s, temperature=%s, middlewares=%d",
+            "LlmService initialized: provider=%s, model=%s, temperature=%s, middlewares=%d",
+            self.provider,
             self.model,
-            self.base_url,
             self.temperature,
             len(self._middlewares),
         )
@@ -145,7 +168,7 @@ class LlmService:
         """
         self._middlewares.append(middleware)
 
-    def get_client(self) -> ChatOllama:
+    def get_client(self) -> BaseChatModel:
         """
         Get the underlying LangChain client.
 
@@ -153,7 +176,7 @@ class LlmService:
         LangChain-specific operations (e.g., building chains).
 
         Returns:
-            ChatOllama: The underlying client instance.
+            BaseChatModel: The underlying client instance.
         """
         return self._client
 
